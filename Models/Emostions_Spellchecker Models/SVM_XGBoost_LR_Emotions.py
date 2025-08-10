@@ -19,11 +19,11 @@ results_save_path = os.path.join(base_path, "model_evaluation_results_separated.
 
 try:
     fakenewsnet_df = pd.read_csv(fakenewsnet_path)
-    print(f"📊 The file {os.path.basename(fakenewsnet_path)} has been loaded successfully. Total rows: {len(fakenewsnet_df)}")
+    print(f" The file {os.path.basename(fakenewsnet_path)} has been loaded successfully. Total rows: {len(fakenewsnet_df)}")
     politifact_df = pd.read_csv(politifact_path)
-    print(f"📊 The file {os.path.basename(politifact_path)} has been loaded successfully. Total rows: {len(politifact_df)}")
+    print(f" The file {os.path.basename(politifact_path)} has been loaded successfully. Total rows: {len(politifact_df)}")
 except FileNotFoundError as e:
-    print(f"❌ ERROR: A required file was not found: {e.filename}")
+    print(f" ERROR: A required file was not found: {e.filename}")
     sys.exit()
 
 # הגדרת הדאטהסטים
@@ -32,7 +32,7 @@ datasets = {
     'politifact': politifact_df
 }
 
-# הגדרת המודלים שישתמשו בסטאקינג
+# הגדרת המודלים
 estimators = [
     ('svm', SVC(kernel='linear', C=1.0, probability=True, random_state=42)),
     ('xgboost', XGBClassifier(random_state=42)),
@@ -47,10 +47,8 @@ configurations = {
     'all_emotions_all': ['sadness', 'joy', 'anger', 'disgust', 'surprise', 'fear', 'neutral']
 }
 
-# לאחסן את כל התוצאות
 all_results = []
 
-# הפעלת האנליזה עבור כל דataset
 for dataset_name, df in datasets.items():
     print(f"\n Starting analysis for dataset: {dataset_name} ")
 
@@ -73,11 +71,10 @@ for dataset_name, df in datasets.items():
             continue
 
         # הפעלת Word2Vec
-        sentences = [text.split() for text in X]  # חיתוך המילים עבור כל טקסט
+        sentences = [text.split() for text in X]
         model = Word2Vec(sentences, vector_size=100, window=5, min_count=1, workers=4, sg=0)
 
         def vectorize_text(text):
-            """ פונקציה להמיר טקסט לווקטור של ממוצע המילים ב-Word2Vec """
             words = text.split()
             vector = np.zeros(100)
             count = 0
@@ -102,7 +99,6 @@ for dataset_name, df in datasets.items():
             X_train, X_test = X_vec[train_index], X_vec[test_index]
             y_train, y_test = y.iloc[train_index], y.iloc[test_index]
 
-            # מודל סטאקינג עם 3 מודלים
             stacking_model = StackingClassifier(
                 estimators=estimators,
                 final_estimator=RandomForestClassifier(n_estimators=10, random_state=42)
@@ -114,9 +110,8 @@ for dataset_name, df in datasets.items():
             y_preds_kfold.extend(y_pred)
             y_tests_kfold.extend(y_test)
 
-        print(f"✅ Cross-Validation training for {config_name} on {dataset_name} completed successfully.")
+        print(f" Cross-Validation training for {config_name} on {dataset_name} completed successfully.")
 
-        # יצירת דוח דיוק
         report = classification_report(y_tests_kfold, y_preds_kfold, output_dict=True, zero_division=0)
 
         for label, metrics in report.items():
@@ -143,7 +138,6 @@ for dataset_name, df in datasets.items():
             'Support': len(y_tests_kfold)
         })
 
-# שמירת התוצאות לקובץ CSV
 results_df = pd.DataFrame(all_results)
 results_df.to_csv(results_save_path, index=False)
-print(f"\n🎉 All evaluation results have been saved successfully to the file: {results_save_path}")
+print(f"\n All evaluation results have been saved successfully to the file: {results_save_path}")
