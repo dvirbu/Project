@@ -1,17 +1,17 @@
 import pandas as pd
 import numpy as np
+import os
+import sys
 from sklearn.model_selection import KFold
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics import classification_report, accuracy_score
 from sklearn.ensemble import RandomForestClassifier, StackingClassifier
 from sklearn.svm import SVC
-import os
-import sys
 
 base_path = r"C:\Users\dvirb\Desktop\Study\C\Project\New_Project\DB"
 fakenewsnet_path = os.path.join(base_path, "preprocessed_fakenewsnet_balanced.csv")
 politifact_path = os.path.join(base_path, "preprocessed_politifact_balanced.csv")
-output_csv_path = os.path.join(base_path, "emotion_configuration_analysis_results.csv")
+output_csv_path = os.path.join(base_path, "emotion_configuration_analysis_results_onehot.csv")
 
 try:
     fakenewsnet_df = pd.read_csv(fakenewsnet_path)
@@ -27,6 +27,7 @@ datasets = {
     'politifact': politifact_df
 }
 
+# קונפיגורציות
 emotions = ['joy', 'surprise', 'sadness', 'anger', 'disgust', 'fear', 'neutral']
 configurations = {
     **{emotion: [emotion] for emotion in emotions},  # כל רגש בנפרד
@@ -36,6 +37,7 @@ configurations = {
     'all_emotions_all': emotions
 }
 
+# הגדרת המודל
 estimators = [
     ('rf', RandomForestClassifier(n_estimators=100, random_state=42)),
     ('svm', SVC(kernel='linear', probability=True, random_state=42))
@@ -43,8 +45,10 @@ estimators = [
 
 results = []
 
+# הרצה
 for dataset_name, df in datasets.items():
     print(f"\n Dataset: {dataset_name}")
+
     for config_name, emotion_list in configurations.items():
         print(f" Config: {config_name} -> {emotion_list}")
 
@@ -53,23 +57,27 @@ for dataset_name, df in datasets.items():
             print(f" Skipping {config_name} (not enough rows)")
             continue
 
-        X = filtered_df['clean_text']
-        y = filtered_df['label']
-
-        if y.nunique() < 2:
+        if filtered_df['label'].nunique() < 2:
             print(f" Skipping {config_name} (not enough classes)")
             continue
 
+        emotion_onehot = pd.get_dummies(filtered_df['emotion'])
+
+        # יצירת מאפייני טקסט
         vectorizer = TfidfVectorizer(max_features=5000)
-        X_vec = vectorizer.fit_transform(X)
+        X_text = vectorizer.fit_transform(filtered_df['clean_text']).toarray()
+
+        # איחוד בין טקסט לרגש
+        X = np.hstack([X_text, emotion_onehot.values])
+        y = filtered_df['label'].values
 
         kf = KFold(n_splits=3, shuffle=True, random_state=42)
         y_preds = []
         y_tests = []
 
-        for train_index, test_index in kf.split(X_vec):
-            X_train, X_test = X_vec[train_index], X_vec[test_index]
-            y_train, y_test = y.iloc[train_index], y.iloc[test_index]
+        for train_index, test_index in kf.split(X):
+            X_train, X_test = X[train_index], X[test_index]
+            y_train, y_test = y[train_index], y[test_index]
 
             model = StackingClassifier(
                 estimators=estimators,
